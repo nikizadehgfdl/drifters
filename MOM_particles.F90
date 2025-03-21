@@ -27,7 +27,8 @@ use MOM_particles_framework, only: particles_gridded, xyt, particle, particles, 
 use MOM_particles_framework, only: verbose, really_debug,debug,use_roundoff_fix
 use MOM_particles_framework, only: find_cell,find_cell_by_search,count_parts,is_point_in_cell,pos_within_cell
 use MOM_particles_framework, only: bilin,yearday,count_parts,parts_chksum
-use MOM_particles_framework, only: linlinx,linliny
+use MOM_particles_framework, only: linlinx0,linliny0
+use MOM_particles_framework, only: find_u,find_v
 use MOM_particles_framework, only: checksum_gridded,add_new_part_to_list
 use MOM_particles_framework, only: send_parts_to_other_pes,move_trajectory,move_all_trajectories
 use MOM_particles_framework, only: record_posn,check_position,print_part,print_parts,print_fld
@@ -106,34 +107,26 @@ subroutine interp_flds(grd, i, j, k, xi, yj, uo, vo, x ,y)
  real, intent(out) :: uo, vo
  ! Local variables
  real :: cos_rot, sin_rot
- real :: hxm, hxp
  integer :: kint
- real  ::  xiu,yjv
- integer  ::  iu, jv
+ real :: dx_dlon, dy_dlat
  kint = ceiling(k)
 
 
  cos_rot=bilin(grd, grd%cos, i, j, xi, yj) ! If true, uses the inverted bilin function
  sin_rot=bilin(grd, grd%sin, i, j, xi, yj)
 
- yjv=yj+0.5
- if (yjv>1) then
-    yjv=yjv-1.
-    jv=j+1
- else
-    jv=j
- endif
- !uo=linlinx(grd, grd%uo(:,:,kint), i+1, j, xi,yj)
- uo=linlinx(grd, grd%uo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i+1, j, xi, yj)
- xiu = xi+0.5
- if (xiu>1) then
-     xiu= xiu-1.
-     iu=i+1
- else
-    iu=i
- endif
- vo=linliny(grd, grd%vo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i, j+1, xi, yj)
- !vo=linliny(grd, grd%vo(:,:,kint), i, j+1, xi, yj)
+ !Use corner values without interpolation,  values make sense for constant uo,vo
+ uo=grd%uo(i,j,kint)
+ vo=grd%vo(i,j,kint)
+
+ !Use older verson of linlin,  interpolated values are 20 times smaller than constant input uo,vo !
+ !uo=linlinx0(grd, grd%uo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i+1, j, xi, yj)
+ !vo=linliny0(grd, grd%vo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i, j+1, xi, yj)
+ !Use newer version of linlin, interpolated values are NaN's
+ !call convert_from_grid_to_meters(y, grd%grid_is_latlon,grd%grid_is_regular, dx_dlon, dy_dlat)
+ !uo=find_u(grd, grd%uo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i+1, j, xi, yj, dx_dlon, dy_dlat)
+ !vo=find_v(grd, grd%vo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i, j+1, xi, yj, dx_dlon, dy_dlat)
+
  ! Rotate vectors from local grid to lat/lon coordinates
  call rotate(uo, vo, cos_rot, sin_rot)
 
@@ -185,8 +178,9 @@ subroutine particles_run(parts, time, uo, vo, ho, tv, dt_adv, use_uh)
   real, dimension(:,:,:),allocatable :: h_upoints, h_vpoints
   real, dimension(:,:), allocatable :: iCount
   integer :: stderrunit
-
-
+  integer :: nparts
+  integer :: vel_stagger
+  vel_stagger = CGRID_NE !; if (present(stagger)) vel_stagger = stagger
   ! Get the stderr unit number
   stderrunit = stderr()
 
@@ -221,11 +215,12 @@ subroutine particles_run(parts, time, uo, vo, ho, tv, dt_adv, use_uh)
   if (parts%traj_sample_hrs == 0) sample_traj=.true.
   if (parts%traj_write_hrs == 0) write_traj=.true.
   if (parts%verbose_hrs == 0) lverbose=.true.
+  nparts=count_parts(parts)
+  call mpp_sum(nparts)
   if (mpp_pe()==mpp_root_pe().and.lverbose) write(*,'(a,3i5,a,3i5,a,i5,f8.3,a,i5)') &
        'MOM_particles: y,m,d=',iyr, imon, iday,' h,m,s=', ihr, imin, isec, &
        ' yr,yrdy=', parts%current_year, parts%current_yearday, &
-       ' number of particles',count_parts(parts)
-
+       ' number of particles',nparts
 
  ! SPENCER: here is where we need to pass all ocean velocities
 
@@ -238,15 +233,32 @@ subroutine particles_run(parts, time, uo, vo, ho, tv, dt_adv, use_uh)
     enddo
     !parts%dt = dt_adv
   else
-    do k=1,grd%ke
-    !  grd%uo(:,:,k) = uo(:,:,k)*grd%dy(:,:)
-    !  grd%vo(:,:,k) = vo(:,:,k)*grd%dx(:,:)
-    !Just like icebergs if (vel_stagger == BGRID_NE) then
+    !original. Why *dx ?
+    !grd%uo(:,:,k) = uo(:,:,k)*grd%dy(:,:)
+    !grd%vo(:,:,k) = vo(:,:,k)*grd%dx(:,:)
+    !icebergs code
+    if (vel_stagger == BGRID_NE) then
       ! Copy ocean and ice velocities. They are already on B-grid u-points.
-      grd%uo(:,:,k) = uo(grd%isd:grd%ied,grd%jsd:grd%jed,k)
-      grd%vo(:,:,k) = vo(grd%isd:grd%ied,grd%jsd:grd%jed,k)
+      grd%uo(grd%isc-1:grd%iec+1,grd%jsc-1:grd%jec+1,:) = uo(:,:,:)
+      grd%vo(grd%isc-1:grd%iec+1,grd%jsc-1:grd%jec+1,:) = vo(:,:,:)
       call mpp_update_domains(grd%uo, grd%vo, grd%domain, gridtype=BGRID_NE)
-    enddo
+    elseif (vel_stagger == CGRID_NE) then
+      ! The u- and v- points will have different offsets with symmetric memory.
+      Iu_off = (size(uo,1) - (grd%iec - grd%isc))/2 - grd%isc + 1
+      ju_off = (size(uo,2) - (grd%jec - grd%jsc))/2 - grd%jsc + 1
+      iv_off = (size(vo,1) - (grd%iec - grd%isc))/2 - grd%isc + 1
+      Jv_off = (size(vo,2) - (grd%jec - grd%jsc))/2 - grd%jsc + 1
+      do I=grd%isc-1,grd%iec ; do J=grd%jsc-1,grd%jec
+        ! Interpolate ocean and ice velocities from C-grid velocity points.
+        Iu = i + Iu_off ; ju = j + ju_off ; iv = i + iv_off ; Jv = j + Jv_off
+        ! This masking is needed for now to prevent icebergs from running up on to land.
+        mask = min(grd%msk(i,j), grd%msk(i+1,j), grd%msk(i,j+1), grd%msk(i+1,j+1))
+        grd%uo(I,J,:) =  0.5*(uo(Iu,ju,:)+uo(Iu,ju+1,:))
+        grd%vo(I,J,:) =  0.5*(vo(iv,Jv,:)+vo(iv+1,Jv,:))
+      enddo ; enddo
+    else
+      call error_mesg('MOM_particles_run', 'Unrecognized value of stagger!', FATAL)
+    endif
   endif
   do k=2,grd%ke
       grd%hdepth(grd%isd:grd%ied,grd%jsd:grd%jed,k) = grd%hdepth(grd%isd:grd%ied,grd%jsd:grd%jed,k-1)+ho(grd%isd:grd%ied,grd%jsd:grd%jed,k)
@@ -396,7 +408,7 @@ subroutine evolve_particles(parts)
         if (debug) call check_position(grd, part, 'evolve_particle (top)')
 !       Interpolate gridded velocity fields to part and generate uvel and vvel
         call interp_flds(grd,part%ine,part%jne,part%k,part%xi,part%yj,part%uvel, part%vvel, part%lon, part%lat)
-          !Time stepping schemes:
+        !Time stepping schemes:
         !call Runge_Kutta_stepping(parts,part, uveln, vveln,lonn, latn, i, j, xi, yj)
         if (xystagger) then
            call Runge_Kutta_xystagger(parts,part, uveln, vveln,lonn, latn, i, j, xi, yj)

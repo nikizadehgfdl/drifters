@@ -33,7 +33,7 @@ use diag_manager_mod, only: diag_axis_init
 implicit none ; private
 
 integer :: buffer_width=20 ! size of buffer dimension for comms
-integer :: buffer_width_traj=17  
+integer :: buffer_width_traj=17
 logical :: folded_north_on_pe = .false. !< If true, indicates the presence of the tri-polar grid
 logical :: verbose=.false. !< Be verbose to stderr
 logical :: debug=.false. !< Turn on debugging
@@ -73,7 +73,8 @@ public move_trajectory, move_all_trajectories
 public find_cell, find_cell_by_search, count_parts, is_point_in_cell, pos_within_cell
 public find_layer, find_depth
 public bilin, yearday, parts_chksum, list_chksum, count_parts_in_list
-public linlinx, linliny, jacob2D
+public find_u, find_v, jacob2D
+public linlinx0, linliny0, jacob2D0
 public checksum_gridded
 public grd_chksum2,grd_chksum3
 public fix_restart_dates, offset_part_dates
@@ -529,7 +530,7 @@ subroutine particles_framework_init(parts, Grid, Time, dt)
     elseif (generate_days==0) then ! .and. 365*(iyr-1)+iday-1==0) then
       lgenerate = .true.
     endif
-    if (lgenerate) then 
+    if (lgenerate) then
        call generate_grid_of_particles(parts, &
                           generate_lons(1), generate_lons(2), generate_lons(3), &
                           generate_lats(1), generate_lats(2), generate_lats(3), &
@@ -1679,7 +1680,7 @@ end subroutine increase_ibuffer
     traj%lat=buff%data(2,n)
 !    traj%year=nint(buff%data(3,n))
     traj%day=buff%data(3,n)
-    traj%year=buff%data(4,n) 
+    traj%year=buff%data(4,n)
     cnt = nint(buff%data(5,n))
     ij = nint(buff%data(6,n))
     traj%id = id_from_2_ints(cnt, ij)
@@ -1691,7 +1692,7 @@ end subroutine increase_ibuffer
     traj%lon_old=buff%data(12,n) !Alon
     traj%lat_old=buff%data(13,n) !Alon
     traj%particle_num=buff%data(14,n)
-    traj%k=buff%data(15,n) 
+    traj%k=buff%data(15,n)
     traj%k_space=buff%data(16,n)
     traj%depth=buff%data(17,n)
 
@@ -1871,7 +1872,7 @@ integer function ij_component_of_id(grd, i, j)
   integer :: jg ! Global j-index
 
   ! Using the current grid shape maximizes the numbers of IDs that can be represented
-  ! allowing up to 30-minute uniform global resolution, or potentially finer if non-uniform. 
+  ! allowing up to 30-minute uniform global resolution, or potentially finer if non-uniform.
   iNg = grd%ieg - grd%isg + 1
 
   ig = i + grd%is_offset ! Calculate global i-index
@@ -2266,18 +2267,18 @@ integer :: stderrunit
       posn%lat=this%lat
       posn%k=this%k
 
-      
+
       kspace_copy = this%k_space
       call find_depth(grd,this%k,h,this%depth,this%ine,this%jne,this%xi,this%yj,kspace_copy)
       if (grd%no_TS) then
-         posn%theta = -999.0 
-      else 
-          posn%theta = bilin(grd,thetao(:,:,floor(this%k)+1), this%ine, this%jne, this%xi, this%yj)  
+         posn%theta = -999.0
+      else
+          posn%theta = bilin(grd,thetao(:,:,floor(this%k)+1), this%ine, this%jne, this%xi, this%yj)
       endif
 
 !      write(stderrunit,'(a,i3,a,i4,3f12.4)') &
 !                     'particles, theta: pe=(',mpp_pe(),') k, xi, xj, theta', &
-!                     floor(this%k), this%lon, this%lat, posn%theta  
+!                     floor(this%k), this%lon, this%lat, posn%theta
       posn%depth=this%depth
       posn%year=parts%current_year
       posn%day=parts%current_yearday
@@ -3139,13 +3140,13 @@ real, intent(in) :: depth
 real, dimension(:),intent(in) :: hdepth
 !real, intent(out) :: k
 
-!Local                                                                          
+!Local
 integer :: klev
 real :: rdepth
 integer :: stderrunit
 
 
-  ! Get the stderr unit number                                                                                
+  ! Get the stderr unit number
   stderrunit=stderr()
 
 
@@ -3192,7 +3193,7 @@ integer :: klev
 real :: rdepth
 integer :: stderrunit
 real, dimension(grd%ke) :: hdepth1D
-real, dimension(grd%ke) :: hdepth1Dcum                                                
+real, dimension(grd%ke) :: hdepth1Dcum
 
   ! Get the stderr unit number
   stderrunit=stderr()
@@ -3209,8 +3210,8 @@ do klev=1,grd%ke
         hdepth1Dcum(klev) =hdepth1D(klev)
     else
         hdepth1Dcum(klev)=hdepth1Dcum(klev-1)+hdepth1D(klev)
-    endif 
-enddo 
+    endif
+enddo
 
    k = find_layer1D(grd, depth,hdepth1Dcum)
 
@@ -3237,7 +3238,7 @@ integer :: stderrunit
   ! Get the stderr unit number
 
   stderrunit=stderr()
-  
+
 kint=floor(k)
 
 !if (kint.eq.0)then
@@ -3256,11 +3257,11 @@ enddo
 
 end function find_depth1D
 
-! ############################################################################## 
-!>Finds what depth the particle is at  
+! ##############################################################################
+!>Finds what depth the particle is at
 subroutine find_depth(grd,k,h,depth,ine,jne,xi,yj,k_space)
 !Arguments
-type(particles_gridded), pointer :: grd !< Container for gridded fields 
+type(particles_gridded), pointer :: grd !< Container for gridded fields
 real, intent(in) :: k
 real, dimension(:,:,:),intent(in) :: h
 real, intent(out) :: depth
@@ -3647,7 +3648,8 @@ integer, intent(in) :: i, j
 
 end function bilin
 
-! #############################################################################
+! ##################################################################
+!Newer versions from Spence Jones
 
 real function linlinx(grd,fld,x,y,i,j,xi,yj)
 ! Arguments
@@ -3658,16 +3660,87 @@ integer, intent(in) :: i, j
 real :: linlinxnum, linlinxden
 ! Local variables
 logical :: explain=.false.
+integer :: stderrunit
+  stderrunit=stderr()
 
-    linlinxnum = fld(i,j  )*xi + fld(i-1,j)*(1-xi)
-    linlinxden = jacob2D(grd%lon(i-1,j-1),grd%lat(i-1,j-1), &
+    linlinx = fld(i,j  )*xi + fld(i-1,j)*(1-xi)
+
+end function linlinx
+
+real function find_u(grd,fld,x, y, i, j, xi, yj, dx_dlon, dy_dlat)
+! Arguments
+type(particles_gridded), pointer :: grd
+real, intent(in) :: x, y
+real, intent(in) :: fld(grd%isd:grd%ied+1,grd%jsd:grd%jed+1), xi, yj
+!real, intent(in) :: fld(grd%isd:grd%ied,grd%jsd:grd%jed), xi, yj
+integer, intent(in) :: i, j
+real, intent(in) :: dx_dlon, dy_dlat
+real :: Ul, Vl, u, v
+real :: linlinxnum, jacden
+! Local variables
+real :: x0 !< Longitude of first corner
+real :: y0 !< Latitude of first corner
+real :: x1 !< Longitude of second corner
+real :: y1 !< Latitude of second corner
+real :: x2 !< Longitude of third corner
+real :: y2 !< Latitude of third corner
+real :: x3 !< Longitude of fourth corner
+real :: y3 !< Latitude of fourth corner
+real :: xx, xx0,xx1,xx2,xx3
+real :: l0, l1, l2, l3
+real :: dxidt, detadt
+real :: Lx
+integer :: stderrunit
+  stderrunit=stderr()
+
+x0 = grd%lon(i-1,j-1)
+x1 = grd%lon(i  ,j-1)
+x2 = grd%lon(i  ,j  )
+x3 = grd%lon(i-1,j  )
+
+y0 = grd%lat(i-1,j-1)
+y1 = grd%lat(i  ,j-1)
+y2 = grd%lat(i  ,j  )
+y3 = grd%lat(i-1,j  )
+
+Lx = grd%Lx
+
+xx= apply_modulo_around_point(x,x0,Lx)
+xx0= apply_modulo_around_point(x0,x0,Lx)
+xx1= apply_modulo_around_point(x1,x0,Lx)
+xx2= apply_modulo_around_point(x2,x0,Lx)
+xx3= apply_modulo_around_point(x3,x0,Lx)
+
+Ul = linlinx(grd,fld,x, y, i, j, xi, yj)
+Vl = linliny(grd,fld,x, y, i, j, xi, yj)
+u = ((-(1-yj)*Ul - (1-xi)*Vl)*x0 &
+      + ((1-yj)*Ul - xi*Vl)*x1   &
+      + (yj*Ul + xi*Vl)*x2       &
+      + (-yj * Ul + (1-xi)*Vl)*x3)
+
+v = ((-(1-yj)*Ul - (1-xi)*Vl)*y0 &
+      + ((1-yj)*Ul - xi*Vl)*y1   &
+      + (yj*Ul + xi*Vl)*y2       &
+      + (-yj * Ul + (1-xi)*Vl)*y3)
+
+jacden = jacob2D(xi, yj, grd%lon(i-1,j-1),grd%lat(i-1,j-1), &
                                       grd%lon(i  ,j-1),grd%lat(i  ,j-1), &
                                       grd%lon(i  ,j  ),grd%lat(i  ,j  ), &
                                       grd%lon(i-1,j  ),grd%lat(i-1,j  ), &
-                                      x, y,grd%Lx, explain=.False.)
-    linlinx = linlinxnum/linlinxden
-end function linlinx
+                                      x, y,grd%Lx, l0, l1, l2, l3, &
+                                        explain=.False.)
 
+
+
+dxidt = u/(jacden*dy_dlat)
+detadt = v/(jacden*dy_dlat)
+
+
+find_u  = dxidt*l0 + detadt*l1
+
+!write(stderrunit,*) 'find_u: u, v, dxidt, detadt, find_u, l0, l1', u, v, dxidt, detadt, find_u, l0, l1
+!write(stderrunit,*) 'find_u: u, Ul, Vl', u, Ul, Vl
+end function find_u
 
 real function linliny(grd,fld,x, y, i, j, xi, yj)
 ! Arguments
@@ -3678,18 +3751,162 @@ real, intent(in) :: fld(grd%isd:grd%ied+1,grd%jsd:grd%jed+1), xi, yj
 integer, intent(in) :: i, j
 real :: linlinynum, linlinyden
 ! Local variables
+integer :: stderrunit
+  stderrunit=stderr()
 
-    linlinynum = fld(i,j  )*yj + fld(i,j-1)*(1-yj)
-    linlinyden = jacob2D(grd%lon(i-1,j-1),grd%lat(i-1,j-1), &
+    linliny = fld(i,j  )*yj + fld(i,j-1)*(1-yj)
+
+end function linliny
+
+real function find_v(grd,fld,x, y, i, j, xi, yj, dx_dlon, dy_dlat)
+! Arguments
+type(particles_gridded), pointer :: grd
+real, intent(in) :: x, y
+real, intent(in) :: fld(grd%isd:grd%ied+1,grd%jsd:grd%jed+1), xi, yj
+!real, intent(in) :: fld(grd%isd:grd%ied,grd%jsd:grd%jed), xi, yj
+integer, intent(in) :: i, j
+real, intent(in) :: dx_dlon, dy_dlat
+real :: Ul, Vl, u, v
+real :: linlinxnum, jacden
+! Local variables
+real :: x0 !< Longitude of first corner
+real :: y0 !< Latitude of first corner
+real :: x1 !< Longitude of second corner
+real :: y1 !< Latitude of second corner
+real :: x2 !< Longitude of third corner
+real :: y2 !< Latitude of third corner
+real :: x3 !< Longitude of fourth corner
+real :: y3 !< Latitude of fourth corner
+real :: xx, xx0,xx1,xx2,xx3
+real :: l0, l1, l2, l3
+real :: dxidt, detadt
+real :: Lx
+integer :: stderrunit
+  stderrunit=stderr()
+
+x0 = grd%lon(i-1,j-1)
+x1 = grd%lon(i  ,j-1)
+x2 = grd%lon(i  ,j  )
+x3 = grd%lon(i-1,j  )
+
+y0 = grd%lat(i-1,j-1)
+y1 = grd%lat(i  ,j-1)
+y2 = grd%lat(i  ,j  )
+y3 = grd%lat(i-1,j  )
+
+Lx = grd%Lx
+
+xx= apply_modulo_around_point(x,x0,Lx)
+xx0= apply_modulo_around_point(x0,x0,Lx)
+xx1= apply_modulo_around_point(x1,x0,Lx)
+xx2= apply_modulo_around_point(x2,x0,Lx)
+xx3= apply_modulo_around_point(x3,x0,Lx)
+
+Ul = linlinx(grd,fld,x, y, i, j, xi, yj)
+Vl = linliny(grd,fld,x, y, i, j, xi, yj)
+v = ((-(1-yj)*Ul - (1-xi)*Vl)*y0 &
+      + ((1-yj)*Ul - xi*Vl)*y1   &
+      + (yj*Ul + xi*Vl)*y2       &
+      + (-yj * Ul + (1-xi)*Vl)*y3)
+
+jacden = jacob2D(xi, yj, grd%lon(i-1,j-1),grd%lat(i-1,j-1), &
+                                      grd%lon(i  ,j-1),grd%lat(i  ,j-1), &
+                                      grd%lon(i  ,j  ),grd%lat(i  ,j  ), &
+                                      grd%lon(i-1,j  ),grd%lat(i-1,j  ), &
+                                      x, y,grd%Lx, l0, l1, l2, l3, &
+                                       explain=.False.)
+
+dxidt = u/(jacden*dx_dlon)
+detadt = v/(jacden*dx_dlon)
+
+
+find_v  = dxidt*l2 + detadt*l3
+
+!write(stderrunit,*) 'find_v: u, v, dxidt, detadt, find_v', u, v, dxidt, detadt, find_v
+
+end function find_v
+
+real function jacob2D(xi, yj, x0, y0, x1, y1, x2, y2, x3, y3, x, y, Lx, l0, l1,l2, l3, explain)
+! Get the stderr unit numberrguments
+real, intent(in) :: xi
+real, intent(in) :: yj
+real, intent(in) :: x0 !< Longitude of first corner
+real, intent(in) :: y0 !< Latitude of first corner
+real, intent(in) :: x1 !< Longitude of second corner
+real, intent(in) :: y1 !< Latitude of second corner
+real, intent(in) :: x2 !< Longitude of third corner
+real, intent(in) :: y2 !< Latitude of third corner
+real, intent(in) :: x3 !< Longitude of fourth corner
+real, intent(in) :: y3 !< Latitude of fourth corner
+real, intent(in) :: x !< Longitude of point
+real, intent(in) :: y !< Latitude of point
+real, intent(in) :: Lx !< Length of domain in zonal direction
+logical, intent(in) :: explain
+real, intent(out) :: l0,l1,l2,l3
+! Local variables
+real :: xx
+real :: xx0,xx1,xx2,xx3
+integer :: stderrunit
+  stderrunit=stderr()
+
+
+  xx= apply_modulo_around_point(x,x0,Lx)
+  xx0= apply_modulo_around_point(x0,x0,Lx)
+  xx1= apply_modulo_around_point(x1,x0,Lx)
+  xx2= apply_modulo_around_point(x2,x0,Lx)
+  xx3= apply_modulo_around_point(x3,x0,Lx)
+
+   l0 = xx0*(yj-1) + xx1*(1-yj) + xx2*yj-xx3*yj
+   l1 = xx0*(xi-1)- xx1*xi + xx2*xi + xx3*(1-xi)
+   l2 = y0*(yj-1) + y1*(1-yj) + y2*yj-y3*yj
+   l3 = y0*(xi-1) - y1*xi + y2 *xi +y3*(1-xi)
+
+  jacob2D = l0*l3 - l2*l3
+end function jacob2D
+
+! #############################################################################
+!Older versions
+real function linlinx0(grd,fld,x,y,i,j,xi,yj)
+! Arguments
+type(particles_gridded), pointer :: grd
+real, intent(in) :: x, y
+real, intent(in) :: fld(grd%isd:grd%ied+1,grd%jsd:grd%jed+1), xi, yj
+integer, intent(in) :: i, j
+real :: linlinxnum, linlinxden
+! Local variables
+logical :: explain=.false.
+
+    linlinxnum = fld(i,j  )*xi + fld(i-1,j)*(1-xi)
+    linlinxden = jacob2D0(grd%lon(i-1,j-1),grd%lat(i-1,j-1), &
                                       grd%lon(i  ,j-1),grd%lat(i  ,j-1), &
                                       grd%lon(i  ,j  ),grd%lat(i  ,j  ), &
                                       grd%lon(i-1,j  ),grd%lat(i-1,j  ), &
                                       x, y,grd%Lx, explain=.False.)
-   linliny = linlinynum/linlinyden
-end function linliny
+    linlinx0 = linlinxnum/linlinxden
+end function linlinx0
 
 
-real function jacob2D(x0, y0, x1, y1, x2, y2, x3, y3, x, y, Lx, explain)
+real function linliny0(grd,fld,x, y, i, j, xi, yj)
+! Arguments
+type(particles_gridded), pointer :: grd
+real, intent(in) :: x, y
+real, intent(in) :: fld(grd%isd:grd%ied+1,grd%jsd:grd%jed+1), xi, yj
+!real, intent(in) :: fld(grd%isd:grd%ied,grd%jsd:grd%jed), xi, yj
+integer, intent(in) :: i, j
+real :: linlinynum, linlinyden
+! Local variables
+
+    linlinynum = fld(i,j  )*yj + fld(i,j-1)*(1-yj)
+    linlinyden = jacob2D0(grd%lon(i-1,j-1),grd%lat(i-1,j-1), &
+                                      grd%lon(i  ,j-1),grd%lat(i  ,j-1), &
+                                      grd%lon(i  ,j  ),grd%lat(i  ,j  ), &
+                                      grd%lon(i-1,j  ),grd%lat(i-1,j  ), &
+                                      x, y,grd%Lx, explain=.False.)
+   linliny0 = linlinynum/linlinyden
+end function linliny0
+
+
+real function jacob2D0(x0, y0, x1, y1, x2, y2, x3, y3, x, y, Lx, explain)
 ! Get the stderr unit numberrguments
 real, intent(in) :: x0 !< Longitude of first corner
 real, intent(in) :: y0 !< Latitude of first corner
@@ -3720,9 +3937,9 @@ integer :: stderrunit
   l1=(xx-xx1)*(y2-y1)-(y-y1)*(xx2-xx1)
   l2=(xx-xx2)*(y3-y2)-(y-y2)*(xx3-xx2)
   l3=(xx-xx3)*(y0-y3)-(y-y3)*(xx0-xx3)
-   
-  jacob2D = l0*l3-l1*l2
-end function jacob2D
+
+  jacob2D0 = l0*l3-l1*l2
+end function jacob2D0
 
 ! ##############################################################################
 
@@ -3755,14 +3972,14 @@ logical function unit_tests(parts)
   integer :: stderrunit,i,j,c1,c2
   integer :: k1
   integer(kind=8) :: id
-  real, dimension(parts%grd%ke) :: hdummy 
+  real, dimension(parts%grd%ke) :: hdummy
   real, dimension(parts%grd%ke) :: hddummy
 
   ! This function returns True is a unit test fails
   unit_tests=.false.
   ! For convenience
   grd=>parts%grd
- 
+
  hdummy(1) = 100
  hddummy(1) = 100
   do k1 =2,grd%ke

@@ -261,7 +261,7 @@ character(len=1), dimension(1) :: dim_names_1d
              vvel,         &
              start_lon,    &
              start_lat,    &
-             start_d) 
+             start_d)
 
 
   deallocate(           &
@@ -269,7 +269,7 @@ character(len=1), dimension(1) :: dim_names_1d
              jne,       &
              drifter_num,       &
              id_cnt,    &
-             id_ij) 
+             id_ij)
 
 end subroutine write_restart_parts
 
@@ -279,7 +279,7 @@ end subroutine write_restart_parts
 !up to year 99,999,999
 character(len=40) function convert_date_to_string(date)
   type(time_type), intent(in) :: date !< The date to be translated into a string.
-  
+
   ! Local variables
   character(len=40) :: sub_string
   real    :: real_secs
@@ -327,16 +327,9 @@ type(particles_gridded), pointer :: grd=>NULL()
 type(particle) :: localpart
 integer :: stderrunit, i, j, k, cnt, ij
 
-real, allocatable,dimension(:) :: lon, &
-                                  lat, &
-                                  depth,  &
-                                  drifter_num,  &
-                                  id, &
-                                  start_lon, &
-                                  start_lat, &
-                                  start_d
-integer, allocatable, dimension(:) :: id_cnt, &
-                                      id_ij
+real, allocatable,dimension(:) :: lon, lat, depth, uvel, vvel, &
+                                  start_lon, start_lat, start_d
+integer, allocatable, dimension(:) :: drifter_num, id_cnt, id_ij, ine, jne
 
 type(FmsNetcdfDomainFile_t) :: fileobj !< Fms2_io fileobj
 character(len=1), dimension(1) :: dim_names_1d
@@ -391,21 +384,34 @@ character(len=1), dimension(1) :: dim_names_1d
     nparts_in_file = siz(1)
     allocate(lon(nparts_in_file))
     allocate(lat(nparts_in_file))
+    allocate(uvel(nparts_in_file))
+    allocate(vvel(nparts_in_file))
+    allocate(ine(nparts_in_file))
+    allocate(jne(nparts_in_file))
     allocate(start_lon(nparts_in_file))
     allocate(start_lat(nparts_in_file))
     allocate(start_d(nparts_in_file))
     allocate(depth(nparts_in_file))
-    replace_drifter_num = variable_exists(fileobj, 'drifter_num') ! True if using a 32-bit drifter_num in restart file
-    if (replace_drifter_num) then
-      allocate(id(nparts_in_file))
-      allocate(drifter_num(nparts_in_file))
-    else
-      allocate(id_cnt(nparts_in_file))
-      allocate(id_ij(nparts_in_file))
-    endif
+    allocate(drifter_num(nparts_in_file))
+    allocate(id_cnt(nparts_in_file))
+    allocate(id_ij(nparts_in_file))
 
-      call read_restart(fileobj)
-      call close_file(fileobj)
+    call register_restart_field(fileobj,'lon',lon, dim_names_1d)
+    call register_restart_field(fileobj,'lat',lat, dim_names_1d)
+    call register_restart_field(fileobj,'depth',depth, dim_names_1d)
+    call register_restart_field(fileobj,'uvel',uvel, dim_names_1d)
+    call register_restart_field(fileobj,'vvel',vvel, dim_names_1d)
+    call register_restart_field(fileobj,'ine',ine, dim_names_1d)
+    call register_restart_field(fileobj,'jne',jne, dim_names_1d)
+    call register_restart_field(fileobj,'start_lon',start_lon, dim_names_1d)
+    call register_restart_field(fileobj,'start_lat',start_lat, dim_names_1d)
+    call register_restart_field(fileobj,'start_d',start_d, dim_names_1d)
+    call register_restart_field(fileobj,'id_cnt',id_cnt, dim_names_1d)
+    call register_restart_field(fileobj,'id_ij',id_ij, dim_names_1d)
+    call register_restart_field(fileobj,'drifter_num',drifter_num, dim_names_1d)
+
+    call read_restart(fileobj)
+    call close_file(fileobj)
   elseif (parts%require_restart) then
      stop 'read_restart_parts, RESTART NOT FOUND!'
   endif
@@ -427,7 +433,7 @@ character(len=1), dimension(1) :: dim_names_1d
       lres=find_cell_by_search(grd, localpart%lon, localpart%lat, localpart%ine, localpart%jne)
     endif
     if (really_debug) then
-      write(stderrunit,'(a,i8,a,2f9.4,a,i8)') 'MOM_particles, read_restart_parts: part ',k,' is at ',localpart%lon,localpart%lat,&
+      write(stderrunit,'(a,i8,a,2f9.4,a,i8)') 'MOM_particles, read_restart_parts: part ',drifter_num(n),' is at ',localpart%lon,localpart%lat,&
            & ' on PE ',mpp_pe()
       write(stderrunit,*) 'MOM_particles, read_restart_parts: lres = ',lres
     endif
@@ -450,24 +456,14 @@ character(len=1), dimension(1) :: dim_names_1d
   enddo
 
   if (found_restart) then
-    deallocate(lon,          &
-               lat,          &
-               depth,        &
-               start_lon,    &
-               start_lat,    &
-               start_d)
-    if (replace_drifter_num) then
-      deallocate(id)
-      deallocate(drifter_num)
-    else
-      deallocate(id_cnt)
-      deallocate(id_ij)
-    endif
-
+    deallocate(lon,lat,depth, uvel,vvel, &
+               start_lon,start_lat,start_d)
+    deallocate(drifter_num)
+    deallocate(id_cnt)
+    deallocate(id_ij)
   endif
 
   call check_for_duplicates_in_parallel(parts)
-
   if (mpp_pe().eq.mpp_root_pe().and.verbose) write(*,'(a)') 'MOM_particles, read_restart_parts: completed'
 
 end subroutine read_restart_parts
