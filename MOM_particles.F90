@@ -116,12 +116,17 @@ subroutine interp_flds(grd, i, j, k, xi, yj, uo, vo, x ,y)
  sin_rot=bilin(grd, grd%sin, i, j, xi, yj)
 
  !Use corner values without interpolation,  values make sense for constant uo,vo
- uo=grd%uo(i,j,kint)
- vo=grd%vo(i,j,kint)
+ !uo=grd%uo(i,j,kint)
+ !vo=grd%vo(i,j,kint)
+
+ !Use Icebergs bilin method
+ uo=bilin(grd, grd%uo(:,:,kint), i, j, xi, yj)
+ vo=bilin(grd, grd%vo(:,:,kint), i, j, xi, yj)
 
  !Use older verson of linlin,  interpolated values are 20 times smaller than constant input uo,vo !
  !uo=linlinx0(grd, grd%uo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i+1, j, xi, yj)
  !vo=linliny0(grd, grd%vo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i, j+1, xi, yj)
+
  !Use newer version of linlin, interpolated values are NaN's
  !call convert_from_grid_to_meters(y, grd%grid_is_latlon,grd%grid_is_regular, dx_dlon, dy_dlat)
  !uo=find_u(grd, grd%uo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i+1, j, xi, yj, dx_dlon, dy_dlat)
