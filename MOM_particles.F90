@@ -1322,7 +1322,6 @@ logical, optional, intent(in)    :: stamp !< If present and true, add time-stamp
 real, dimension(:,:,:),intent(in)      :: h !< Thickness of layers
 
 
-
   if (.not.associated(parts)) return
   call mpp_clock_begin(parts%clock_iow)
   call parts_chksum(parts, 'write_restart parts')
@@ -1342,6 +1341,7 @@ real,dimension(:,:,:),optional,intent(in) :: temp, salt
 ! Local variables
 type(particle), pointer :: this, next
 
+
   if (.not.associated(parts)) return
 
   ! particles_save_restart() is called directly by SIS1 and SIS2 so
@@ -1354,39 +1354,38 @@ type(particle), pointer :: this, next
   !  call particles_save_restart(parts,h)
   !endif
 
-!  call mpp_clock_begin(parts%clock_ini)
   ! Delete parts and structures
   call move_all_trajectories(parts, delete_parts=.true.)
 
   !call write_trajectory(parts%trajectories)
 
-!  deallocate(parts%grd%lon)
-!  deallocate(parts%grd%lat)
-!  deallocate(parts%grd%lonc)
-  !Note from Niki: I don't think all these deallocates are necessary, and some of them cause the model to crash! We should find why.
-  !deallocate(parts%grd%latc) !This cause model to crash with corrupted size vs. prev_size
-  !deallocate(parts%grd%dx)
-  !deallocate(parts%grd%dy)
-  !deallocate(parts%grd%area)
-!  deallocate(parts%grd%msk)
-!  deallocate(parts%grd%cos)
-!  deallocate(parts%grd%sin)
-!  deallocate(parts%grd%ocean_depth)
-! ! deallocate(parts%grd%domain)
-! ! deallocate(parts%grd)
+  deallocate(parts%grd%lon)
+  deallocate(parts%grd%lat)
+  deallocate(parts%grd%lonc)
+  deallocate(parts%grd%latc)
+  deallocate(parts%grd%dx)
+  deallocate(parts%grd%dy)
+  deallocate(parts%grd%area)
+  deallocate(parts%grd%msk)
+  deallocate(parts%grd%cos)
+  deallocate(parts%grd%sin)
+  deallocate(parts%grd%ocean_depth)
+  deallocate(parts%grd%uo,parts%grd%vo)
+  deallocate(parts%grd%tmp)
+  deallocate(parts%grd%particle_counter_grd)
 
-!  call dealloc_buffer(parts%obuffer_n)
-!  call dealloc_buffer(parts%obuffer_s)
-!  call dealloc_buffer(parts%obuffer_e)
-!  call dealloc_buffer(parts%obuffer_w)
-!  call dealloc_buffer(parts%ibuffer_n)
-!  call dealloc_buffer(parts%ibuffer_s)
-!  call dealloc_buffer(parts%ibuffer_e)
-!  call dealloc_buffer(parts%ibuffer_w)
-!  call dealloc_buffer(parts%ibuffer_io)
-!  call dealloc_buffer(parts%obuffer_io)
-! call mpp_clock_end(parts%clock_ini)
-  !deallocate(parts)
+  call dealloc_buffer(parts%obuffer_n)
+  call dealloc_buffer(parts%obuffer_s)
+  call dealloc_buffer(parts%obuffer_e)
+  call dealloc_buffer(parts%obuffer_w)
+  call dealloc_buffer(parts%ibuffer_n)
+  call dealloc_buffer(parts%ibuffer_s)
+  call dealloc_buffer(parts%ibuffer_e)
+  call dealloc_buffer(parts%ibuffer_w)
+  call dealloc_buffer(parts%ibuffer_io)
+  call dealloc_buffer(parts%obuffer_io)
+
+!  deallocate(parts)  !cause crash
 
   if (mpp_pe()==mpp_root_pe()) write(*,'(a,i8)') 'drifters: particles_end complete',mpp_pe()
 

@@ -129,9 +129,9 @@ type :: particles_gridded
   real, dimension(:,:,:), allocatable :: vo !< Ocean meridional flow (m/s)
   real, dimension(:,:,:), allocatable :: hdepth !< Cumulative thickness from ocen surf
   real, dimension(:,:), allocatable :: tmp !< Temporary work space
-  real, dimension(:,:), allocatable :: tmpc !< Temporary work space
-  real, dimension(:,:), allocatable :: parity_x !< X component of vector point from i,j to i+1,j+1 (for detecting tri-polar fold)
-  real, dimension(:,:), allocatable :: parity_y !< Y component of vector point from i,j to i+1,j+1 (for detecting tri-polar fold)
+  !real, dimension(:,:), allocatable :: tmpc !< Temporary work space
+  !real, dimension(:,:), allocatable :: parity_x !< X component of vector point from i,j to i+1,j+1 (for detecting tri-polar fold)
+  !real, dimension(:,:), allocatable :: parity_y !< Y component of vector point from i,j to i+1,j+1 (for detecting tri-polar fold)
   integer, dimension(:,:), allocatable :: particle_counter_grd !< Counts particles created for naming purposes
   !>@{
   !! Diagnostic handle
@@ -357,8 +357,8 @@ subroutine particles_framework_init(parts, Grid, Time, dt)
   big_number=1.0E15
   allocate( grd%lon(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%lon(:,:)=big_number
   allocate( grd%lat(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%lat(:,:)=big_number
-  allocate( grd%lonc(grd%isd:grd%ied, grd%jsd:grd%jed) );grd%lon(:,:)=big_number
-  allocate( grd%latc(grd%isd:grd%ied, grd%jsd:grd%jed) );grd%lat(:,:)=big_number
+  allocate( grd%lonc(grd%isd:grd%ied, grd%jsd:grd%jed) );grd%lonc(:,:)=big_number
+  allocate( grd%latc(grd%isd:grd%ied, grd%jsd:grd%jed) );grd%latc(:,:)=big_number
   allocate( grd%dx(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%dx(:,:)=0.
   allocate( grd%dy(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%dy(:,:)=0.
   allocate( grd%area(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%area(:,:)=0.
@@ -369,11 +369,12 @@ subroutine particles_framework_init(parts, Grid, Time, dt)
   allocate( grd%uo(grd%isd:grd%ied, grd%jsd:grd%jed,grd%ke) ); grd%uo(:,:,:)=0.
   allocate( grd%vo(grd%isd:grd%ied, grd%jsd:grd%jed,grd%ke) ); grd%vo(:,:,:)=0.
   allocate( grd%tmp(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%tmp(:,:)=0.
-  allocate( grd%tmpc(grd%isc:grd%iec, grd%jsc:grd%jec) ); grd%tmpc(:,:)=0.
-  allocate( grd%parity_x(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%parity_x(:,:)=1.
-  allocate( grd%parity_y(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%parity_y(:,:)=1.
+  !The following are not used/needed
+  !allocate( grd%tmpc(grd%isc:grd%iec, grd%jsc:grd%jec) ); grd%tmpc(:,:)=0.
+  !allocate( grd%parity_x(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%parity_x(:,:)=1.
+  !allocate( grd%parity_y(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%parity_y(:,:)=1.
   allocate( grd%particle_counter_grd(grd%isd:grd%ied, grd%jsd:grd%jed) ); grd%particle_counter_grd(:,:)=0
-
+  !Niki: MOM6 is on C grid. Shouldn't the role of (lon,lat) and (lonc,latc) be reversed?
 
   is=grd%isc; ie=grd%iec; js=grd%jsc; je=grd%jec
   grd%lon(is:ie,js:je)=Grid%geolonBu(is:ie,js:je)
@@ -390,14 +391,17 @@ subroutine particles_framework_init(parts, Grid, Time, dt)
 
   call mpp_update_domains(grd%lon, grd%domain)
   call mpp_update_domains(grd%lat, grd%domain)
-  call mpp_update_domains(grd%dy, grd%dx, grd%domain, gridtype=CGRID_NE, flags=SCALAR_PAIR)
+  !Niki: The following call causes a strange memory issue with deallocating grd%latc
+  !      Check why this call is here and why issue happens
+  !call mpp_update_domains(grd%dy, grd%dx, grd%domain, gridtype=CGRID_NE, flags=SCALAR_PAIR)
+!  deallocate(grd%latc)
+!  return
   call mpp_update_domains(grd%area, grd%domain)
   call mpp_update_domains(grd%msk, grd%domain)
   call mpp_update_domains(grd%cos, grd%domain, position=CENTER)
   call mpp_update_domains(grd%sin, grd%domain, position=CENTER)
   call mpp_update_domains(grd%ocean_depth, grd%domain)
-  call mpp_update_domains(grd%parity_x, grd%parity_y, grd%domain, gridtype=AGRID) ! If either parity_x/y is -ve, we need rotation of vectors
-
+  !call mpp_update_domains(grd%parity_x, grd%parity_y, grd%domain, gridtype=AGRID) ! If either parity_x/y is -ve, we need rotation of vectors
 
 
   ! Sanitize lon and lat in the southern halo
@@ -469,13 +473,17 @@ subroutine particles_framework_init(parts, Grid, Time, dt)
   grd%lat(is:ie,js:je)=Grid%geolatBu(is:ie,js:je)
 
   ! WE SHOULD JUST COPY geolonC,geolatC instead (MJH)
+  grd%lonc(is:ie,js:je)=Grid%geoLonCu(is:ie,js:je)
+  grd%latc(is:ie,js:je)=Grid%geoLatCu(is:ie,js:je)
+
   ! lonc, latc used for searches
-  do j=grd%jsd+1,grd%jed; do i=grd%isd+1,grd%ied
-    grd%lonc(i,j)=0.25*( (grd%lon(i,j)+grd%lon(i-1,j-1)) &
-                        +(grd%lon(i-1,j)+grd%lon(i,j-1)) )
-    grd%latc(i,j)=0.25*( (grd%lat(i,j)+grd%lat(i-1,j-1)) &
-                        +(grd%lat(i-1,j)+grd%lat(i,j-1)) )
-  enddo; enddo
+  !do j=grd%jsd+1,grd%jed; do i=grd%isd+1,grd%ied  !This cannot be correct
+  !do j=grd%jsc,grd%jec; do i=grd%isc,grd%iec      !Should be this followd by halo updates
+  !    grd%lonc(i,j)=0.25*( (grd%lon(i,j)+grd%lon(i-1,j-1)) &
+  !                      +(grd%lon(i-1,j)+grd%lon(i,j-1)) )
+  !    grd%latc(i,j)=0.25*( (grd%lat(i,j)+grd%lat(i-1,j-1)) &
+  !                        +(grd%lat(i-1,j)+grd%lat(i,j-1)) )
+  !enddo; enddo
 
   if (debug) then
     write(stderrunit,'(a,i3,a,4i4,a,4f8.2)') 'particles, particles_init: (',mpp_pe(),') [ij][se]c=', &
@@ -2394,7 +2402,7 @@ integer :: grdi, grdj
     do while (associated(this))
       next=>this%next
       call move_trajectory(parts, this)
-   !  if (delete_parts_after_moving_traj) call destroy_particle(this)
+      if (delete_parts_after_moving_traj) call destroy_particle(this)
       this=>next
     enddo
   enddo ; enddo
