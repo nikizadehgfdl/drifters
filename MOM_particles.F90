@@ -111,7 +111,6 @@ subroutine interp_flds(grd, i, j, k, xi, yj, uo, vo, x ,y)
  real :: dx_dlon, dy_dlat
  kint = ceiling(k)
 
-
  cos_rot=bilin(grd, grd%cos, i, j, xi, yj) ! If true, uses the inverted bilin function
  sin_rot=bilin(grd, grd%sin, i, j, xi, yj)
 
@@ -327,6 +326,7 @@ subroutine particles_to_k_space(parts,h)
     part=>parts%list(grdi,grdj)%first
     do while (associated(part)) ! loop over all parts
     call find_layer(grd, part%depth, h, part%k, part%ine,part%jne, part%xi,part%yj, part%k_space)
+    if(part%fixed_k>0) part%k = part%fixed_k
     part=>part%next
     enddo
    enddo ; enddo
@@ -414,12 +414,13 @@ subroutine evolve_particles(parts)
 !       Interpolate gridded velocity fields to part and generate uvel and vvel
         call interp_flds(grd,part%ine,part%jne,part%k,part%xi,part%yj,part%uvel, part%vvel, part%lon, part%lat)
         !Time stepping schemes:
-        !call Runge_Kutta_stepping(parts,part, uveln, vveln,lonn, latn, i, j, xi, yj)
-        if (xystagger) then
-           call Runge_Kutta_xystagger(parts,part, uveln, vveln,lonn, latn, i, j, xi, yj)
-        else
-           call Runge_Kutta_stepping(parts,part, uveln, vveln,lonn, latn, i, j, xi, yj)
-        endif
+        call Runge_Kutta_stepping(parts,part, uveln, vveln,lonn, latn, i, j, xi, yj)
+        !Currentl xystagger=.false.
+        !if (xystagger) then
+        !   call Runge_Kutta_xystagger(parts,part, uveln, vveln,lonn, latn, i, j, xi, yj)
+        !else
+        !   call Runge_Kutta_stepping(parts,part, uveln, vveln,lonn, latn, i, j, xi, yj)
+        !endif
 
         part%uvel=uveln
         part%vvel=vveln

@@ -42,7 +42,6 @@ logical :: parallel_reprod=.true. !< Reproduce across different PE decomposition
 logical :: use_slow_find=.true. !< Use really slow (but robust) find_cell for reading restarts
 logical :: ignore_ij_restart=.false. !< Read i,j location from restart if available (needed to use restarts on different grids)
 logical :: use_roundoff_fix=.true. !< Use a "fix" for the round-off discrepancy between is_point_in_cell() and pos_within_cell()
-logical :: old_bug_bilin=.true. !< If true, uses the inverted bilinear function (use False to get correct answer)
 character(len=10) :: restart_input_dir = 'INPUT/' !< Directory to look for restart files
 integer, parameter :: delta_buf=25 !< Size by which to increment buffers
 real, parameter :: pi_180=pi/180. !< Converts degrees to radians
@@ -53,7 +52,7 @@ logical :: force_all_pes_traj=.false. !< Force all pes write trajectory files re
 
 !Public params !Niki: write a subroutine to expose these
 public buffer_width,buffer_width_traj
-public verbose, really_debug, debug, restart_input_dir,old_bug_bilin,use_roundoff_fix
+public verbose, really_debug, debug, restart_input_dir,use_roundoff_fix
 public ignore_ij_restart, use_slow_find
 public force_all_pes_traj
 
@@ -151,6 +150,7 @@ type :: xyt
   integer :: year, particle_num  !< Current year and particle number
   integer(kind=8) :: id = -1 !< Particle Identifier
   real :: k !<Current vertical level i which the particle resides
+  real :: fixed_k = -1 !< If positive, level at which the floater is supposed to stay permanently
   real :: depth !<Current depth of the particle
   logical :: k_space      !<Logical indicating whether particle is in k (vs z)
   type(xyt), pointer :: next=>null()  !< Pointer to the next position in the list
@@ -170,6 +170,7 @@ type :: particle
   integer(kind=8) :: id,drifter_num             !< particle identifier
   integer :: ine, jne                           !< nearest index in NE direction (for convenience)
   real :: k                 !<vertical level of particle
+  real :: fixed_k = -1      !<if positive, vertical level at which the floater is supposed to stay permanently
   logical :: k_space        !<flag for whether depth is stored in kspace (vs z)
   real :: xi, yj                                !< non-dimensional coords within current cell (0..1)
   real :: uo, vo                                !< zonal and meridional ocean velocities experienced
@@ -288,7 +289,7 @@ subroutine particles_framework_init(parts, Grid, Time, dt)
          debug, really_debug, ignore_missing_restart_parts, &
          parallel_reprod, use_slow_find, ignore_ij_restart, use_new_predictive_corrective, halo_debugging, &
          fix_restart_dates, use_roundoff_fix, Runge_not_Verlet, &
-         restart_input_dir, old_bug_bilin,do_unit_tests, force_all_pes_traj, &
+         restart_input_dir,do_unit_tests, force_all_pes_traj, &
          grid_is_latlon,Lx, no_TS, &
          grid_is_regular, &
          generate_days, generate_lons, generate_lats, generate_d, &
@@ -3649,7 +3650,6 @@ type(particles_gridded), pointer :: grd
 real, intent(in) :: fld(grd%isd:grd%ied,grd%jsd:grd%jed), xi, yj
 integer, intent(in) :: i, j
 ! Local variables
-
 
     bilin=(fld(i,j  )*xi+fld(i-1,j  )*(1.-xi))*yj &
          +(fld(i,j-1)*xi+fld(i-1,j-1)*(1.-xi))*(1.-yj)
