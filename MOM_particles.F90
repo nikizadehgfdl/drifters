@@ -326,7 +326,7 @@ subroutine particles_to_k_space(parts,h)
     part=>parts%list(grdi,grdj)%first
     do while (associated(part)) ! loop over all parts
     call find_layer(grd, part%depth, h, part%k, part%ine,part%jne, part%xi,part%yj, part%k_space)
-    if(part%fixed_k>0) part%k = part%fixed_k
+    if(part%k_fixed>0) part%k = part%k_fixed !Fix the level if the particle is requested to have a fixed k
     part=>part%next
     enddo
    enddo ; enddo

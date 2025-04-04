@@ -147,10 +147,10 @@ type :: xyt
   real :: uvel, vvel         !< Current velocity components (m/s)
   real :: uvel_old, vvel_old !< Previous velocity components (m/s)
   real :: theta
-  integer :: year, particle_num  !< Current year and particle number
+  integer :: year, drifter_num  !< Current year and particle number
   integer(kind=8) :: id = -1 !< Particle Identifier
   real :: k !<Current vertical level i which the particle resides
-  real :: fixed_k = -1 !< If positive, level at which the floater is supposed to stay permanently
+  real :: k_fixed = -1 !< If positive, level at which the floater is supposed to stay permanently
   real :: depth !<Current depth of the particle
   logical :: k_space      !<Logical indicating whether particle is in k (vs z)
   type(xyt), pointer :: next=>null()  !< Pointer to the next position in the list
@@ -170,7 +170,7 @@ type :: particle
   integer(kind=8) :: id,drifter_num             !< particle identifier
   integer :: ine, jne                           !< nearest index in NE direction (for convenience)
   real :: k                 !<vertical level of particle
-  real :: fixed_k = -1      !<if positive, vertical level at which the floater is supposed to stay permanently
+  real :: k_fixed = -1      !<if positive, vertical level at which the floater is supposed to stay permanently
   logical :: k_space        !<flag for whether depth is stored in kspace (vs z)
   real :: xi, yj                                !< non-dimensional coords within current cell (0..1)
   real :: uo, vo                                !< zonal and meridional ocean velocities experienced
@@ -1343,6 +1343,7 @@ integer :: kspace_int
   call push_buffer_value(buff%data(:,n), counter, part%ine)
   call push_buffer_value(buff%data(:,n), counter, part%jne)
   call push_buffer_value(buff%data(:,n), counter, part%k)
+  call push_buffer_value(buff%data(:,n), counter, part%k_fixed)
   call push_buffer_value(buff%data(:,n), counter, kspace_int)
   call push_buffer_value(buff%data(:,n), counter, part%halo_part)
 
@@ -1480,6 +1481,7 @@ logical :: quick
   call pull_buffer_value(buff%data(:,n), counter, localpart%ine)
   call pull_buffer_value(buff%data(:,n), counter, localpart%jne)
   call pull_buffer_value(buff%data(:,n), counter, localpart%k)
+  call pull_buffer_value(buff%data(:,n), counter, localpart%k_fixed)
   call pull_buffer_value(buff%data(:,n), counter, kspace_int)
   call pull_buffer_value(buff%data(:,n), counter, localpart%halo_part)
 
@@ -1667,10 +1669,11 @@ end subroutine increase_ibuffer
     buff%data(11,n)=traj%vvel_old !Alon
     buff%data(12,n)=traj%lon_old !Alon
     buff%data(13,n)=traj%lat_old !Alon
-    buff%data(14,n)=traj%particle_num !Alon
+    buff%data(14,n)=traj%drifter_num !Alon
     buff%data(15,n)=traj%k
     buff%data(16,n)=traj%k_space
     buff%data(17,n)=traj%depth
+    buff%data(18,n)=traj%k_fixed
 
   end subroutine pack_traj_into_buffer2
 
@@ -1700,10 +1703,11 @@ end subroutine increase_ibuffer
     traj%vvel_old=buff%data(11,n) !Alon
     traj%lon_old=buff%data(12,n) !Alon
     traj%lat_old=buff%data(13,n) !Alon
-    traj%particle_num=buff%data(14,n)
+    traj%drifter_num=buff%data(14,n)
     traj%k=buff%data(15,n)
     traj%k_space=buff%data(16,n)
     traj%depth=buff%data(17,n)
+    traj%k_fixed=buff%data(18,n)
 
     call append_posn(first, traj)
 
@@ -1976,7 +1980,7 @@ end subroutine insert_part_into_list
 
 ! ##############################################################################
 
-logical function inorder(part1, part2)  !MP Alon - Change to include particle_num
+logical function inorder(part1, part2)  !MP Alon - Change to include drifter_num
 ! Arguments
 type(particle), pointer :: part1, part2
 ! Local variables
@@ -2292,7 +2296,7 @@ integer :: stderrunit
       posn%year=parts%current_year
       posn%day=parts%current_yearday
       posn%id=this%id
-      posn%particle_num=this%drifter_num
+      posn%drifter_num=this%drifter_num
       if (.not. parts%save_short_traj) then !Not totally sure that this is correct
         posn%uvel=this%uvel
         posn%vvel=this%vvel
@@ -3569,7 +3573,7 @@ integer :: grdi, grdj
   call mpp_sum(nparts)
   if (mpp_pe().eq.mpp_root_pe()) &
     write(*,'("particles, parts_chksum: ",a18,6(x,a,"=",i22))') &
-      txt, 'chksum', ichk1, 'chksum2', ichk2, 'chksum3', ichk3, 'chksum4', ichk4, 'chksum5', ichk5, '#', nparts
+      txt, '#particles', nparts, 'chksum', ichk1, 'chksum2', ichk2, 'chksum3', ichk3, 'chksum4', ichk4, 'chksum5', ichk5
 
   grd%tmp(:,:)=real(icnt(:,:))
 !  call grd_chksum2(grd,grd%tmp,'# of parts/cell')

@@ -125,6 +125,7 @@ type(particles_gridded), pointer :: grd
 real, allocatable, dimension(:) :: lon,          &
                                    lat,          &
                                    depth,        &
+                                   k_fixed,      &
                                    uvel,         &
                                    vvel,         &
                                    start_lon,    &
@@ -175,6 +176,7 @@ character(len=1), dimension(1) :: dim_names_1d
    allocate(lon(nparts))
    allocate(lat(nparts))
    allocate(depth(nparts))
+   allocate(k_fixed(nparts))
    allocate(uvel(nparts))
    allocate(vvel(nparts))
    allocate(start_lon(nparts))
@@ -195,6 +197,7 @@ character(len=1), dimension(1) :: dim_names_1d
       kspace_copy = this%k_space
       call find_depth(grd,this%k,h,this%depth,this%ine,this%jne,this%xi,this%yj,kspace_copy)
       lon(i) = this%lon; lat(i) = this%lat; depth(i) = this%depth
+      k_fixed(i) = this%k_fixed
       uvel(i) = this%uvel; vvel(i) = this%vvel
       ine(i) = this%ine; jne(i) = this%jne
       start_lon(i) = this%start_lon; start_lat(i) = this%start_lat
@@ -224,6 +227,8 @@ character(len=1), dimension(1) :: dim_names_1d
                                    dim_names_1d,longname='latitude',units='degrees_N')
   call register_restart_field_wrap(fileobj,'depth',depth, &
                                    dim_names_1d,longname='depth below surface',units='m')
+  call register_restart_field_wrap(fileobj,'k_fixed',k_fixed, &
+                                   dim_names_1d,longname='fixed vertical layer',units='none')
   call register_restart_field_wrap(fileobj,'uvel',uvel, &
                                    dim_names_1d,longname='zonal velocity',units='m/s')
   call register_restart_field_wrap(fileobj,'vvel',vvel, &
@@ -257,6 +262,7 @@ character(len=1), dimension(1) :: dim_names_1d
              lon,          &
              lat,          &
              depth,        &
+             k_fixed,        &
              uvel,         &
              vvel,         &
              start_lon,    &
@@ -327,7 +333,7 @@ type(particles_gridded), pointer :: grd=>NULL()
 type(particle) :: localpart
 integer :: stderrunit, i, j, k, cnt, ij
 
-real, allocatable,dimension(:) :: lon, lat, depth, uvel, vvel, &
+real, allocatable,dimension(:) :: lon, lat, depth, k_fixed, uvel, vvel, &
                                   start_lon, start_lat, start_d
 integer, allocatable, dimension(:) :: drifter_num, id_cnt, id_ij, ine, jne
 
@@ -382,6 +388,7 @@ character(len=1), dimension(1) :: dim_names_1d
     call get_dimension_size(fileobj, 'i', siz(1))
 
     nparts_in_file = siz(1)
+    replace_drifter_num = variable_exists(fileobj, 'drifter_num') ! True if using 32-bit drifter_num in restart file
     allocate(lon(nparts_in_file))
     allocate(lat(nparts_in_file))
     allocate(uvel(nparts_in_file))
@@ -392,6 +399,7 @@ character(len=1), dimension(1) :: dim_names_1d
     allocate(start_lat(nparts_in_file))
     allocate(start_d(nparts_in_file))
     allocate(depth(nparts_in_file))
+    allocate(k_fixed(nparts_in_file))
     allocate(drifter_num(nparts_in_file))
     allocate(id_cnt(nparts_in_file))
     allocate(id_ij(nparts_in_file))
@@ -399,6 +407,7 @@ character(len=1), dimension(1) :: dim_names_1d
     call register_restart_field(fileobj,'lon',lon, dim_names_1d)
     call register_restart_field(fileobj,'lat',lat, dim_names_1d)
     call register_restart_field(fileobj,'depth',depth, dim_names_1d)
+    call register_restart_field(fileobj,'k_fixed',k_fixed, dim_names_1d)
     call register_restart_field(fileobj,'uvel',uvel, dim_names_1d)
     call register_restart_field(fileobj,'vvel',vvel, dim_names_1d)
     call register_restart_field(fileobj,'ine',ine, dim_names_1d)
@@ -426,6 +435,7 @@ character(len=1), dimension(1) :: dim_names_1d
     localpart%lon=lon(n)
     localpart%lat=lat(n)
     localpart%depth=depth(n)
+    localpart%k_fixed=k_fixed(n)
 
     if (use_slow_find) then
       lres=find_cell(grd, localpart%lon, localpart%lat, localpart%ine, localpart%jne)
@@ -456,7 +466,7 @@ character(len=1), dimension(1) :: dim_names_1d
   enddo
 
   if (found_restart) then
-    deallocate(lon,lat,depth, uvel,vvel, &
+    deallocate(lon,lat,depth,k_fixed, uvel,vvel, &
                start_lon,start_lat,start_d)
     deallocate(drifter_num)
     deallocate(id_cnt)
@@ -476,7 +486,7 @@ logical, intent(in) :: save_short_traj !< If true, record less data
 ! Local variables
 integer :: iret, ncid, i_dim, i
 integer :: lonid, latid, yearid, dayid, uvelid, vvelid, idcntid, idijid, drnumid
-integer :: kid, depthid, thetaid
+integer :: kid, k_fixedid, depthid, thetaid
 integer :: uoid, void, uiid, viid, uaid, vaid, sshxid, sshyid, sstid, sssid
 integer :: cnid, hiid
 integer :: mid, did, wid, lid, mbid, hdid
@@ -594,6 +604,7 @@ integer :: ntrajs_sent_io,ntrajs_rcvd_io
       lonid = inq_varid(ncid, 'lon')
       latid = inq_varid(ncid, 'lat')
       kid = inq_varid(ncid, 'k')
+      k_fixedid = inq_varid(ncid, 'k_fixed')
       depthid = inq_varid(ncid, 'depth')
       yearid = inq_varid(ncid, 'year')
       dayid = inq_varid(ncid, 'day')
@@ -614,6 +625,7 @@ integer :: ntrajs_sent_io,ntrajs_rcvd_io
       lonid = def_var(ncid, 'lon', NF_DOUBLE, i_dim)
       latid = def_var(ncid, 'lat', NF_DOUBLE, i_dim)
       kid = def_var(ncid,'k', NF_DOUBLE, i_dim)
+      k_fixedid = def_var(ncid,'k_fixed', NF_DOUBLE, i_dim)
       depthid = def_var(ncid,'depth', NF_DOUBLE, i_dim)
       yearid = def_var(ncid, 'year', NF_INT, i_dim)
       dayid = def_var(ncid, 'day', NF_DOUBLE, i_dim)
@@ -634,6 +646,8 @@ integer :: ntrajs_sent_io,ntrajs_rcvd_io
       call put_att(ncid, latid, 'units', 'degrees_N')
       call put_att(ncid, kid, 'long_name', 'k')
       call put_att(ncid, kid, 'units', 'layer number')
+      call put_att(ncid, k_fixedid, 'long_name', 'k_fixed')
+      call put_att(ncid, k_fixedid, 'units', 'fixed layer number')
       call put_att(ncid, depthid, 'long_name', 'depth')
       call put_att(ncid, depthid, 'units', 'm')
       call put_att(ncid, yearid, 'long_name', 'year')
@@ -672,10 +686,11 @@ integer :: ntrajs_sent_io,ntrajs_rcvd_io
       call put_double(ncid, lonid, i, this%lon)
       call put_double(ncid, latid, i, this%lat)
       call put_double(ncid, kid, i, this%k)
+      call put_double(ncid, k_fixedid, i, this%k_fixed)
       call put_double(ncid, depthid, i, this%depth)
       call put_int(ncid, yearid, i, this%year)
       call put_double(ncid, dayid, i, this%day)
-      call put_int(ncid, drnumid, i, this%particle_num)
+      call put_int(ncid, drnumid, i, this%drifter_num)
       call split_id(this%id, cnt, ij)
       call put_int(ncid, idcntid, i, cnt)
       call put_int(ncid, idijid, i, ij)
