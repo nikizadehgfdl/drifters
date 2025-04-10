@@ -566,7 +566,7 @@ integer :: ntrajs_sent_io,ntrajs_rcvd_io
 
   if((force_all_pes_traj .OR. is_io_tile_root_pe) .AND. associated(traj4io)) then
 
-    call get_instance_filename("drifter_trajectories.nc", filename)
+    call get_instance_filename("drifters_trajectories.nc", filename)
     if(io_tile_id(1) .ge. 0 .AND. .NOT. force_all_pes_traj) then !io_tile_root_pes write
        if(io_npes .gt. 1) then !attach tile_id  to filename only if there is more than one I/O pe
           if (io_tile_id(1)<10000) then

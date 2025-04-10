@@ -32,7 +32,7 @@ use diag_manager_mod, only: diag_axis_init
 
 implicit none ; private
 
-integer :: buffer_width=20 ! size of buffer dimension for comms
+integer :: buffer_width=21 ! size of buffer dimension for comms
 integer :: buffer_width_traj=17
 logical :: folded_north_on_pe = .false. !< If true, indicates the presence of the tri-polar grid
 logical :: verbose=.false. !< Be verbose to stderr
@@ -1358,7 +1358,8 @@ subroutine push_buffer_rvalue(vbuf, counter, val)
   real,               intent(in)    :: val     !< Value to place in buffer
 
   counter = counter + 1
-  if (counter > size(vbuf)) stop 'OOB in push_buffer_rvalue'
+  if (counter > size(vbuf))&
+     call error_mesg('MOM_particles_framework: push_buffer_rvalue ', 'OOB error', FATAL)
   vbuf(counter) = val
 
 end subroutine push_buffer_rvalue
@@ -1370,7 +1371,8 @@ subroutine push_buffer_ivalue(vbuf, counter, val)
   integer,            intent(in)    :: val     !< Value to place in buffer
 
   counter = counter + 1
-  if (counter > size(vbuf)) stop 'OOB in push_buffer_ivalue'
+  if (counter > size(vbuf))&
+     call error_mesg('MOM_particles_framework: push_buffer_ivalue ', 'OOB error', FATAL)
   vbuf(counter) = float(val)
 
 end subroutine push_buffer_ivalue
@@ -2293,6 +2295,7 @@ integer :: stderrunit
 !                     'particles, theta: pe=(',mpp_pe(),') k, xi, xj, theta', &
 !                     floor(this%k), this%lon, this%lat, posn%theta
       posn%depth=this%depth
+      posn%k_fixed=this%k_fixed
       posn%year=parts%current_year
       posn%day=parts%current_yearday
       posn%id=this%id
