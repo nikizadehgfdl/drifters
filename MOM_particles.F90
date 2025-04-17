@@ -253,7 +253,6 @@ subroutine particles_run(parts, time, uo, vo, ho, tv, dt_adv, use_uh)
   if (debug) call checksum_gridded(parts%grd, 'top of s/r run')
 
   !Move to k-space if not already
-
   call particles_to_k_space(parts,ho)
 
   if (parts%initial_traj) then 
@@ -305,7 +304,7 @@ subroutine particles_to_k_space(parts,h)
 
    do grdj = grd%jsc,grd%jec ; do grdi = grd%isc,grd%iec
     part=>parts%list(grdi,grdj)%first
-    do while (associated(part)) ! loop over all parts 
+    do while (associated(part)) ! loop over all parts
     call find_layer(grd, part%depth, h, part%k, part%ine,part%jne, part%xi,part%yj, part%k_space)
     part=>part%next
     enddo

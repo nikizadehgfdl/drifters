@@ -569,6 +569,10 @@ integer :: i, j, d, ie, je, de
 integer :: num
 real :: lat_min, lat_max
 logical :: lres
+integer :: stderrunit
+
+  ! Get the stderr and stdlog unit numbers
+  stderrunit=stderr()
 
 
   grd=>parts%grd
@@ -576,8 +580,8 @@ logical :: lres
   lat_max = maxval( grd%lat(grd%isc-1:grd%iec,grd%jsc-1:grd%jec) )
 
   ! Adjust local grid range to match generating grid
-  lat_min = max( int((lat_min - lat_start)/dlat)*dlat + lat_start, lat_start)
-  lat_max = min( int((lat_max - lat_start)/dlat)*dlat + lat_start, lat_end)
+  !lat_min = max( int((lat_min - lat_start)/dlat)*dlat + lat_start, lat_start)
+  !lat_max = min( int((lat_max - lat_start)/dlat)*dlat + lat_start, lat_end)
 
   ie = int( (lon_end-lon_start)/dlon - 0.5 )
   je = int( (lat_end-lat_start)/dlat - 0.5 )
@@ -596,7 +600,7 @@ logical :: lres
      endif
      do j =  0,je
         localpart%lat = lat_start + dlat*float(j)
-!        if (localpart%lat >= lat_min .and. localpart%lat <= lat_max) then
+        if (localpart%lat > lat_min .and. localpart%lat <= lat_max) then
          do i = 0,ie
            localpart%lon = lon_start + dlon*float(i)
            lres=find_cell(grd, localpart%lon, localpart%lat, localpart%ine, localpart%jne)
@@ -610,7 +614,7 @@ logical :: lres
              endif
            endif
          enddo
-!       endif
+       endif
      enddo
    enddo
 
@@ -3156,7 +3160,6 @@ integer :: stderrunit
 
 
 
-
 if (depth.lt.hdepth(1)) then
    find_layer1D=depth/hdepth(1)
    return
@@ -3736,14 +3739,14 @@ jacden = jacob2D(xi, yj, grd%lon(i-1,j-1),grd%lat(i-1,j-1), &
 
 
 
-dxidt = u/(jacden*dy_dlat)
-detadt = v/(jacden*dy_dlat)
+find_u = u/(jacden*dy_dlat)
+!detadt = v/(jacden*dy_dlat)
 
 
-find_u  = dxidt*l0 + detadt*l1
+!find_u  = dxidt*l0 + detadt*l2
 
 !write(stderrunit,*) 'find_u: u, v, dxidt, detadt, find_u, l0, l1', u, v, dxidt, detadt, find_u, l0, l1
-!write(stderrunit,*) 'find_u: u, Ul, Vl', u, Ul, Vl
+!write(stderrunit,*) 'find_u: u, Ul, Vl, jacden, dy_dlat', u, Ul, Vl, jacden, dy_dlat
 end function find_u
 
 real function linliny(grd,fld,x, y, i, j, xi, yj)
@@ -3808,6 +3811,13 @@ xx3= apply_modulo_around_point(x3,x0,Lx)
 
 Ul = linlinx(grd,fld,x, y, i, j, xi, yj)
 Vl = linliny(grd,fld,x, y, i, j, xi, yj)
+
+
+u = ((-(1-yj)*Ul - (1-xi)*Vl)*x0 &
+      + ((1-yj)*Ul - xi*Vl)*x1   &
+      + (yj*Ul + xi*Vl)*x2       &
+      + (-yj * Ul + (1-xi)*Vl)*x3)
+
 v = ((-(1-yj)*Ul - (1-xi)*Vl)*y0 &
       + ((1-yj)*Ul - xi*Vl)*y1   &
       + (yj*Ul + xi*Vl)*y2       &
@@ -3820,11 +3830,11 @@ jacden = jacob2D(xi, yj, grd%lon(i-1,j-1),grd%lat(i-1,j-1), &
                                       x, y,grd%Lx, l0, l1, l2, l3, &
                                        explain=.False.)
 
-dxidt = u/(jacden*dx_dlon)
-detadt = v/(jacden*dx_dlon)
+!dxidt = u/(jacden*dx_dlon)
+find_v = v/(jacden*dx_dlon)
 
 
-find_v  = dxidt*l2 + detadt*l3
+!find_v  = dxidt*l2 + detadt*l3
 
 !write(stderrunit,*) 'find_v: u, v, dxidt, detadt, find_v', u, v, dxidt, detadt, find_v
 
