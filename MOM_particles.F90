@@ -108,29 +108,34 @@ subroutine interp_flds(grd, i, j, k, xi, yj, uo, vo, x ,y)
  ! Local variables
  real :: cos_rot, sin_rot
  integer :: kint
+ real  ::  xiu,yjv
  real :: dx_dlon, dy_dlat
+ integer  ::  iu, jv
  kint = ceiling(k)
+
+ call convert_from_grid_to_meters(y, grd%grid_is_latlon,grd%grid_is_regular, dx_dlon, dy_dlat)
 
  cos_rot=bilin(grd, grd%cos, i, j, xi, yj) ! If true, uses the inverted bilin function
  sin_rot=bilin(grd, grd%sin, i, j, xi, yj)
 
- !Use corner values without interpolation,  values make sense for constant uo,vo
- !uo=grd%uo(i,j,kint)
- !vo=grd%vo(i,j,kint)
-
- !Use Icebergs bilin method
- uo=bilin(grd, grd%uo(:,:,kint), i, j, xi, yj)
- vo=bilin(grd, grd%vo(:,:,kint), i, j, xi, yj)
-
- !Use older verson of linlin,  interpolated values are 20 times smaller than constant input uo,vo !
- !uo=linlinx0(grd, grd%uo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i+1, j, xi, yj)
- !vo=linliny0(grd, grd%vo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i, j+1, xi, yj)
-
- !Use newer version of linlin, interpolated values are NaN's
- !call convert_from_grid_to_meters(y, grd%grid_is_latlon,grd%grid_is_regular, dx_dlon, dy_dlat)
- !uo=find_u(grd, grd%uo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i+1, j, xi, yj, dx_dlon, dy_dlat)
- !vo=find_v(grd, grd%vo(grd%isd:grd%ied,grd%jsd:grd%jed,kint), x, y, i, j+1, xi, yj, dx_dlon, dy_dlat)
-
+ yjv=yj+0.5
+ if (yjv>1) then
+    yjv=yjv-1.
+    jv=j+1
+ else
+    jv=j
+ endif
+ !uo=linlinx(grd, grd%uo(:,:,kint), i+1, j, xi,yj)
+ uo=find_u(grd, grd%uo(grd%isd:grd%ied+1,grd%jsd:grd%jed+1,kint), x, y, i+1, j, xi, yj, dx_dlon, dy_dlat)
+ xiu = xi+0.5
+ if (xiu>1) then
+     xiu= xiu-1.
+     iu=i+1
+ else
+    iu=i
+ endif
+ vo=find_v(grd, grd%vo(grd%isd:grd%ied+1,grd%jsd:grd%jed+1,kint), x, y, i, j+1, xi, yj, dx_dlon, dy_dlat)
+ !vo=linliny(grd, grd%vo(:,:,kint), i, j+1, xi, yj)
  ! Rotate vectors from local grid to lat/lon coordinates
  call rotate(uo, vo, cos_rot, sin_rot)
 
@@ -272,7 +277,6 @@ subroutine particles_run(parts, time, uo, vo, ho, tv, dt_adv, use_uh)
   if (debug) call checksum_gridded(parts%grd, 'top of s/r run')
 
   !Move to k-space if not already
-
   call particles_to_k_space(parts,ho)
 
   if (parts%initial_traj) then
